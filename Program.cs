@@ -23,6 +23,7 @@ namespace IngameScript
 
 		private readonly Dictionary<string, Action> userActions;
 		private readonly Dictionary<string, Action<string>> userCommands;
+
 		private readonly MyIni ini;
 
 		private bool configLoaded;
@@ -46,8 +47,23 @@ namespace IngameScript
 			Runtime.UpdateFrequency = UpdateFrequency.Once;
 		}
 
+		StringBuilder terminalOutput;
+		StringBuilder lastMessage;
+
+		public void SetMessage(string message)
+		{
+			lastMessage.Clear();
+			lastMessage.Append(message);
+		}
+		public void ClearMessage()
+		{
+			lastMessage.Clear();
+		}
+
 		public void Main(string Arguments, UpdateType UpdateSource)
 		{
+			terminalOutput.Clear();
+
 			if ((UpdateSource & UpdateType.Terminal) != 0) {
 				// Run when a terminal command or toolbar action triggers
 				// the programmable block 'Run' action
@@ -62,7 +78,6 @@ namespace IngameScript
 					else if (userCommands.TryGetValue(cmd, out Action<string> actionString)) {
 						if (CommandLine.ArgumentCount == 2) {
 							actionString(CommandLine.Argument(2));
-							throw new ArgumentException();
 						}
 					}
 				}
@@ -86,6 +101,10 @@ namespace IngameScript
 					Load();
 				}
 			}
+
+			terminalOutput.AppendStringBuilder(lastMessage);
+			terminalOutput.AppendLine();
+			terminalOutput.AppendFormat("{0}", GetActivityIndicator());
 		}
 
 		/// <summary>
@@ -122,6 +141,7 @@ namespace IngameScript
 
 			lang = ini.Get(sectionKey, "language").ToString(langDefault);
 
+			SetMessage(GetText("CONFIGURATION_LOADED"));
 			configLoaded = true;
 		}
 
@@ -134,6 +154,7 @@ namespace IngameScript
 		public void Save()
 		{
 			Me.CustomData = ini.ToString();
+			SetMessage(GetText("CONFIGURATION_SAVED"));
 		}
 
 		//
@@ -149,18 +170,25 @@ namespace IngameScript
 		private readonly Dictionary<string, Dictionary<string, string>> langDict = new Dictionary<string, Dictionary<string, string>>() {
 			{
 				"en", new Dictionary<string,string>() {
-					#pragma warning disable format
+#pragma warning disable format
 					//
 					// Language independant idstring									Localized string the idstring will be replace with
 					//
+					{ "CONFIGURATION_LOADED",											"Configuration Loaded." },
+					{ "CONFIGURATION_SAVED",											"Configuration Saved." },
+
 					{ "ERROR_SAVE_VERSION_MISMATCH",									"Error: Save Version is newer than Script Version : '{0:D2}' > '{1:D2}'\nAborting..." }
-					#pragma warning restore format
+#pragma warning restore format
+				}
+			},
+			{
+				"de", new Dictionary<string, string>() {
 				}
 			}
 		};
 
 		/// <summary>
-		/// Returns the localized version of 'key' or an empty string if not found
+		/// Returns the localized version of <paramref name="key">key</paramref> or an empty string if not found
 		/// </summary>
 		/// <param name="key">idstring</param>
 		/// <returns>string Localized String</returns>
@@ -181,24 +209,13 @@ namespace IngameScript
 		// Output Helpers
 		//
 
-		/// <summary>
-		/// This is an internal counter for the little . .. ... .... indicator
-		/// </summary>
+		private readonly string[] _activityStrings = new string[] { "    ", ".   ", " .  ", "  . ", "   ." };
 		private int _activityCounter;
 
-		/// <summary>
-		/// Returns an ever changing string to let the user know the script is "working"
-		/// </summary>
-		/// <returns>string Indicator</returns>
 		private string GetActivityIndicator()
 		{
-			string[] strs = { ".   ", " .  ", "  . ", "   ." };
-
-			if (_activityCounter >= strs.Length) {
-				_activityCounter = 0;
-			}
-
-			return strs[_activityCounter++];
+			if (_activityCounter >= _activityStrings.Length) { _activityCounter = 0; }
+			return _activityStrings[_activityCounter++];
 		}
 	}
 

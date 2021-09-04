@@ -21,19 +21,27 @@ namespace IngameScript
 	{
 		private readonly float scriptVersion = 1.0f;
 
-		private readonly Dictionary<string, Action> userCommands;
+		private readonly Dictionary<string, Action> userActions;
+		private readonly Dictionary<string, Action<string>> userCommands;
 		private readonly MyIni ini;
 
 		private bool configLoaded;
 
 		public Program()
 		{
-			userCommands = new Dictionary<string, Action>(StringComparer.OrdinalIgnoreCase) {
+			// simple function call without paramaters
+			userActions = new Dictionary<string, Action>(StringComparer.OrdinalIgnoreCase) {
 				{ "load", Load },
 				{ "save", Save }
 			};
 
+			// function call with single parameter
+			userCommands = new Dictionary<string, Action<string>>(StringComparer.OrdinalIgnoreCase) {
+			};
+
 			ini = new MyIni();
+
+			configLoaded = false;
 
 			Runtime.UpdateFrequency = UpdateFrequency.Once;
 		}
@@ -48,8 +56,14 @@ namespace IngameScript
 				if (CommandLine.TryParse(Arguments)) {
 					string cmd = CommandLine.Argument(0).ToLower();
 
-					if (userCommands.TryGetValue(cmd, out Action commandAction)) {
-						commandAction();
+					if (userActions.TryGetValue(cmd, out Action action)) {
+						action();
+					}
+					else if (userCommands.TryGetValue(cmd, out Action<string> actionString)) {
+						if (CommandLine.ArgumentCount == 2) {
+							actionString(CommandLine.Argument(2));
+							throw new ArgumentException();
+						}
 					}
 				}
 
@@ -90,9 +104,10 @@ namespace IngameScript
 			if (string.IsNullOrWhiteSpace(Me.CustomData) || !ini.TryParse(Me.CustomData)) {
 				ini.AddSection(sectionKey);
 				ini.Set(sectionKey, "version", scriptVersion);
+				ini.Set(sectionKey, "language", lang);
 			}
 
-			saveVersion = ini.Get(sectionKey, "version").ToSingle(1.0f);
+			saveVersion = ini.Get(sectionKey, "version").ToSingle();
 
 			// Sanity Check
 			// Do not continue loading if save version is newer than script version
@@ -104,6 +119,8 @@ namespace IngameScript
 
 				return;
 			}
+
+			lang = ini.Get(sectionKey, "language").ToString(langDefault);
 
 			configLoaded = true;
 		}
@@ -123,16 +140,15 @@ namespace IngameScript
 		// - Language / Localization
 		//
 
-		private enum Language
-		{
-			en
-		}
+		private readonly string langDefault = "en";
+		private string lang = "en";
 
-		private readonly Language lang = Language.en;
-		
-		private readonly Dictionary<Language, Dictionary<string, string>> langDict = new Dictionary<Language, Dictionary<string, string>>() {
+		/// <summary>
+		/// 
+		/// </summary>
+		private readonly Dictionary<string, Dictionary<string, string>> langDict = new Dictionary<string, Dictionary<string, string>>() {
 			{
-				Language.en, new Dictionary<string,string>() {
+				"en", new Dictionary<string,string>() {
 					#pragma warning disable format
 					//
 					// Language independant idstring									Localized string the idstring will be replace with
@@ -143,13 +159,46 @@ namespace IngameScript
 			}
 		};
 
+		/// <summary>
+		/// Returns the localized version of 'key' or an empty string if not found
+		/// </summary>
+		/// <param name="key">idstring</param>
+		/// <returns>string Localized String</returns>
 		private string GetText(string key)
 		{
+			if (string.IsNullOrEmpty(key)) {
+				return string.Empty;
+			}
+
 			if (langDict.ContainsKey(lang) && langDict[lang].ContainsKey(key)) {
 				return langDict[lang][key];
 			}
 
 			return string.Empty;
+		}
+
+		//
+		// Output Helpers
+		//
+
+		/// <summary>
+		/// This is an internal counter for the little . .. ... .... indicator
+		/// </summary>
+		private int _activityCounter;
+
+		/// <summary>
+		/// Returns an ever changing string to let the user know the script is "working"
+		/// </summary>
+		/// <returns>string Indicator</returns>
+		private string GetActivityIndicator()
+		{
+			string[] strs = { ".   ", " .  ", "  . ", "   ." };
+
+			if (_activityCounter >= strs.Length) {
+				_activityCounter = 0;
+			}
+
+			return strs[_activityCounter++];
 		}
 	}
 

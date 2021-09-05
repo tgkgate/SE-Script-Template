@@ -1,4 +1,4 @@
-﻿#region Usings
+#region Usings
 using Sandbox.ModAPI.Ingame;
 using System.Collections.Generic;
 #endregion
